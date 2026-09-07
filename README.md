@@ -454,25 +454,3 @@ private void HandleDialogueEnded()
 | `ShopUIView` | 상점 UI 참조 · 목록/상세 전환 | 로직과 뷰 분리 |
 | `ShopNPC` | 대화 선택지 기반 상점 진입 | 선택 시 예약 · 대화 종료 후 실행 |
 | `ShopDebugOpener` | 개발용 단축키 상점 열기 | 디버그 전용 |
-
----
-
-## 한계 및 남은 작업
-
-- **`DialogueRunner.cs` 미사용** — `lineId` 미지원 구버전. 정리 필요
-- **일부 파일 주석 인코딩 깨짐** — UTF-8 재저장 필요
-- **`DialogueManager` 싱글턴이 `DontDestroyOnLoad` 아님** — 씬마다 인스턴스 필요. 씬 전환 중 대화 유지 불가
-- **상점 재고가 세이브에 포함되지 않음** — `remainingStock` 은 런타임 전용
-- **선택지 키보드 조작 미지원** — 현재 마우스 클릭만
-
----
-
-## 빌드 / 실행
-
-```
-Unity <버전>
-1. 프로젝트 열기
-2. Scenes/<시작 씬> 열기
-3. Play
-```
-<!-- TODO: Unity 버전 · 시작 씬 이름 채우기 -->
