@@ -1,456 +1,262 @@
 # Marginalia
-![](https://cdn.jsdelivr.net/gh/m2za5/Marginalia@main/Image.png)
+
+![Marginalia](https://cdn.jsdelivr.net/gh/m2za5/Marginalia@main/Image.png)
 
 만년필로 길을 만들고 적을 물리치며 뒤틀린 동화 세계를 정화하는 **2.5D 액션 어드벤처**
+
 Unity · C# · 개발 4인 / 아티스트 2인 · 2026.03 ~ 진행 중
 
----
+[플레이 영상](https://youtu.be/GDm_sxGuMDo)
 
-## 게임 소개
+## 프로젝트 개요
 
-- 만년필로 그린 선이 발판·공격이 되는 드로잉 액션
-- 뒤틀린 동화 세계를 구역 단위로 정화
-- NPC 대화 · 퀘스트 · 상점으로 진행 분기
-
-| | |
+| 항목 | 내용 |
 |---|---|
-| **엔진** | Unity (URP) |
-| **언어** | C# |
-| **플랫폼** | Windows PC |
-| **팀** | 개발 4인 / 아티스트 2인 |
-| **협업** | Azure DevOps |
-| **담당** | 클라이언트 — 대화 · NPC · 상점 |
+| 엔진 | Unity (URP) |
+| 언어 | C# |
+| 플랫폼 | Windows PC |
+| 팀 | 개발 4인 / 아티스트 2인 |
+| 협업 | Azure DevOps |
+| 주요 담당 | 드로잉 전투 스킬 · 상점 · 대화 · NPC 행동 및 상호작용 |
 
----
+만년필 드로잉으로 발판을 만들거나 공격 스킬을 사용하고, NPC 대화와 퀘스트를 통해 동화 세계를 탐험하는 게임입니다.
 
-## 담당 범위
+이 저장소는 담당 기능의 주요 소스를 공개하는 포트폴리오용 저장소입니다. 전체 Unity 프로젝트와 실행에 필요한 에셋을 포함하지 않습니다.
 
-개발 4인 팀이므로 **아래 항목만 본인 작업**. 전투 · 드로잉 · 스테이지는 팀원 담당.
+## 주요 담당 업무
 
-| 영역 | 핵심 |
+아래는 팀 프로젝트에서 본인이 구현·수정한 기능입니다. 각 기능은 플레이어·피해 처리·게임 상태·저장 등 프로젝트 공통 시스템과 연동합니다.
+
+| 영역 | 주요 구현 |
 |---|---|
-| [대화 재생](#1-대화-재생-시스템) | 상태 기계 기반 입력 분기 · 프레임 보정 타이핑 |
-| [선택지 · 점프 분기](#2-lineid-기반-분기) | `lineId` 우선 참조로 대사 순서 변경에 안전 |
-| [에디터 검증](#3-데이터-오류를-런타임-전에-차단) | `OnValidate`로 잘못된 참조를 임포트 시점에 차단 |
-| [대화 연출 · 종료 연동](#4-대화-종료-이벤트-연동) | 종료된 대화를 식별해 후속 처리 분기 |
-| [NPC 행동 · 상호작용](#5-npc-행동상호작용) | 가중치 랜덤 행동 · 상태 기반 상호작용 게이트 |
-| [상점](#6-상점) | 구매 판정 일원화 · 대화 선택지 연동 진입 |
+| [드로잉 전투 스킬](#1-드로잉-전투-스킬) | 패턴 인식 결과와 시전 연동 · 스크린–월드 좌표 변환 · 경로형·범위형 공격 판정 · 드로잉 선을 이용한 적 투사체 제거 |
+| [상점 시스템](#2-상점-시스템) | 구매 조건 검증 공통화 · 구매 성공 후 재고 처리 · 상점·상품 ID 기반 재고 저장 및 복원 |
+| [대화 시스템](#3-대화-시스템) | 상태별 입력 처리 · 대사 ID 기반 분기 · 게임 상태 복원 후 종료 이벤트 전달 |
+| [NPC 행동 및 상호작용](#4-npc-행동-및-상호작용) | ScriptableObject 기반 가중치 행동 선택 · 컷신 중 행동 제어 · 근접·게임 상태 검사 및 퀘스트 수락 연동 |
 
----
+## 1. 드로잉 전투 스킬
 
-## 1. 대화 재생 시스템
+### 시전 조건 검증과 공격 실행
 
-`DialogueManager` · `DialogueView`
+**설계 목표**
 
-### 상태 기계로 입력을 분기
+드로잉 패턴 인식 결과를 공격 스킬 실행으로 연결하고, 잉크 부족·쿨타임·타겟팅 실패 시 시전을 제한합니다.
 
-**문제** — 같은 입력키가 상황마다 다른 동작이어야 함. 출력 중이면 문장 완성, 출력 후면 다음 대사, 선택지 대기 중이면 무시.
+**구현 방식**
 
-**조치** — 4개 상태로 분리하고 `Update`에서 상태별 처리
+- 드로잉 완료 시 패턴 인식 결과에 따라 방향 지정 공격인 **Ink Slash** 또는 지점 지정 범위 공격인 **Ink Eruption**의 시전 함수로 분기합니다.
+- 잉크·쿨타임과 스킬별 타겟팅 조건을 검증한 뒤 잉크를 차감하고 스킬을 실행합니다.
+- 스킬별 쿨타임 종료 시각을 기록하고, 시전 결과에 따른 피드백을 표시합니다.
 
-```csharp
-private enum State { Inactive, Typing, WaitingForContinue, WaitingForChoice }
-```
+관련 코드: `PlayerAreaDrawingSkillCaster.cs`, `CombatDrawingSkillDefinition.cs`
 
-- `Typing` 중 입력 → `CompleteLine()` — 전체 문장 즉시 표시
-- `WaitingForContinue` 중 입력 → `Advance()` — 다음 대사
-- `WaitingForChoice` → 입력 무시, 버튼 클릭만 수용
+### 스크린–월드 좌표 변환과 타겟팅
 
-### 같은 입력이 두 번 먹는 문제
+**설계 목표**
 
-**문제** — 문장 완성 입력이 같은 프레임에 "다음 대사"로도 처리되어 한 줄이 건너뛰어짐
+플레이어가 화면에서 그린 위치를 월드 공간의 공격 방향 또는 시전 지점으로 변환합니다.
 
-**조치** — 상태 전환 시 입력 잠금 프레임 기록
+**구현 방식**
 
-```csharp
-_inputUnlockFrame = Time.frameCount + 1;
-...
-if (Time.frameCount < _inputUnlockFrame) return;
-```
+- 드로잉 바운딩 박스의 중심을 조준 스크린 좌표로 사용합니다.
+- **Slash**는 카메라 Raycast 충돌점을 우선 사용합니다. 충돌점이 없으면 시전 원점 높이의 수평면에 투영하고, 목표 지점을 향하는 수평 공격 방향을 계산합니다.
+- **Eruption**은 지면 충돌점의 경사·장애물 가림·수평 사거리를 검증해 시전 위치를 확정합니다.
 
-선택지 선택 직후 · 타이핑 완료 직후 · 대화 시작 직후 3곳에 적용.
+관련 코드: `PlayerAreaDrawingSkillCaster.cs`, `DrawingWorldProjector.cs`
 
-### 코루틴 대신 누적 시간 방식
+### 경로형·범위형 공격 판정
 
-**문제** — 코루틴 `WaitForSeconds` 방식은 프레임 드랍 시 타이핑이 밀림
+**설계 목표**
 
-**조치** — `Update`에서 누적 시간을 글자 수로 환산
+공격 형태에 맞게 피해 대상을 검출하고, 하나의 대상에 여러 Collider가 있어도 중복으로 피해를 요청하지 않도록 처리합니다.
 
-```csharp
-_typeAccumulator += Time.unscaledDeltaTime;
-int step = (int)(_typeAccumulator / typeSpeed);
-if (step > 0)
-{
-    _typeAccumulator -= step * typeSpeed;
-    _visibleChars = Mathf.Min(_visibleChars + step, _totalChars);
-    dialogueText.maxVisibleCharacters = _visibleChars;
-}
-```
+**구현 방식**
 
-- 한 프레임에 여러 글자를 넘겨 **프레임 드랍을 보정**
-- `unscaledDeltaTime` 사용 → `timeScale = 0` 상태에서도 타이핑 진행
-- `maxVisibleCharacters` 조작 방식 → 문자열 재할당 없음
-
-### UI 리빌드 비용 회피
-
-`SetActive` 대신 `Canvas.enabled` 를 우선 사용. 계층 활성/비활성은 레이아웃 리빌드를 유발하지만 Canvas 비활성화는 그리기만 멈춤.
-
-```csharp
-private void SetRootVisible(bool visible)
-{
-    if (dialogueCanvas != null)
-    {
-        if (dialogueCanvas.enabled != visible) dialogueCanvas.enabled = visible;
-        return;
-    }
-    if (dialoguePanel != null && dialoguePanel.activeSelf != visible)
-        dialoguePanel.SetActive(visible);
-}
-```
-
-Canvas 미할당 시 GameObject 방식으로 폴백. 대화 루트 · 선택지 패널 양쪽에 동일 적용.
-
-### 선택지 버튼 풀링
-
-`DialogueView`에서 버튼을 파괴하지 않고 재사용. 선택지 수가 대사마다 달라도 최대치만큼만 생성됨.
-
-```csharp
-private Button GetOrCreateChoiceButton(int index)
-{
-    while (_spawnedChoices.Count <= index)
-    {
-        Button btn = Instantiate(choiceButtonPrefab, choicesContainer);
-        btn.gameObject.SetActive(false);
-        _spawnedChoices.Add(btn);
-    }
-    return _spawnedChoices[index];
-}
-```
-
-### 대화 전 게임 상태 저장 · 복원
-
-- 대화 시작 시 `GameStateManager`의 현재 상태 저장 후 `Dialogue`로 전환
-- **이미 `Dialogue` 상태였으면 복원 대상에서 제외** — 중첩 대화에서 상태가 꼬이는 것 방지
-- 복원은 **여전히 `Dialogue` 상태일 때만** 수행 — 대화 도중 다른 시스템이 상태를 바꿨으면 그 결정을 존중
-
-```csharp
-_shouldRestorePreviousGameState = _previousGameState != GameState.Dialogue;
-...
-if (GameStateManager.Instance.IsState(GameState.Dialogue))
-    GameStateManager.Instance.ChangeState(_previousGameState);
-```
-
-### 초상화 보정
-
-`PortraitCalibration` (ScriptableObject)
-
-**문제** — 초상화마다 원본 크기와 여백이 달라 같은 UI 슬롯에서 제각각으로 보임
-
-**조치** — 스프라이트별 `scale` · `offset` 을 데이터로 분리. 아트 리소스를 수정하지 않고 배치 보정
-
-- 첫 조회 시 `Dictionary<Sprite, Entry>` 캐시 구성
-- 스프라이트가 바뀔 때만 보정값 적용 (`portraitImage.sprite != sprite`)
-- `sqrMagnitude` 비교로 동일 스케일 재대입 회피
-
----
-
-## 2. lineId 기반 분기
-
-**문제** — 선택지와 점프를 배열 인덱스로 가리키면, 대사를 중간에 하나 추가하는 순간 이후 연결이 전부 어긋남
-
-**조치** — 각 대사에 고유 `lineId` 를 부여하고 **ID 우선 · 인덱스 폴백**
-
-```csharp
-private int ResolveIndex(string id, int fallbackIndex, string context)
-{
-    if (string.IsNullOrEmpty(id)) return fallbackIndex;
-    if (_hasIdMap && _idToIndex.TryGetValue(id, out int resolved)) return resolved;
-
-    Debug.LogError($"[DialogueManager] {context}: targetLineId '{id}' 해석 실패. 대화를 종료한다.");
-    return -1;
-}
-```
-
-- 대화 시작 시 `BuildIdMap()` 으로 `lineId → index` 사전 구성 — 매 분기마다 순회하지 않음
-- ID 미지정이면 기존 인덱스 사용 → **기존 데이터와 호환**
-- 해석 실패 시 `-1` 반환 → 대화 종료. **잘못된 참조로 무한 루프에 빠지지 않음**
-- 중복 `lineId` 발견 시 에러 로그 후 앞의 것 유지
-
-선택지 · 점프 양쪽이 같은 `ResolveIndex` 를 사용.
-
----
-
-## 3. 데이터 오류를 런타임 전에 차단
-
-`Dialogue.OnValidate` · `ShopNPC.OnValidate` · `NPCInteractable.OnValidate`
-
-**문제** — 대화 데이터는 기획 단계에서 자주 수정됨. 잘못된 참조는 **해당 대사에 도달해야만** 드러나서 발견이 늦음
-
-**조치** — 에셋 편집 시점에 검증
-
-| 대상 | 검사 |
+| 공격 | 충돌 검사 |
 |---|---|
-| `Dialogue` | `lineId` 중복 · `jumpTargetIndex` 범위 · `targetLineId`가 실제 존재하는지 |
-| `ShopNPC` | 트리거 `lineId` 가 해당 대화에 있는지 · `choiceIndex` 가 선택지 개수 내인지 |
-| `NPCInteractable` | Collider가 `isTrigger` 인지 · 2D Collider가 붙어 있지 않은지 |
-| `NPCIdleBehaviorData` | `pauseMax < pauseMin` 자동 보정 · `Animate` 인데 `stateName` 비어 있는지 |
+| Ink Slash | `SphereCastNonAlloc`으로 공격 경로를 검사하고, 시작 지점의 겹침은 `OverlapSphereNonAlloc`으로 보완 |
+| Ink Eruption | 지정 지점에서 `OverlapSphereNonAlloc`으로 범위 내 대상 검출 |
 
-에디터에서 즉시 빨간 로그가 뜨므로 **플레이 없이 데이터 오류를 잡음.**
+검출된 Collider의 상위 객체에서 `IDamageable`을 조회하고, `HashSet<IDamageable>`로 대상별 피해 요청을 **시전당 1회**로 제한합니다. 피해 적용 결과에 따라 타격 피드백을 실행합니다.
 
----
+관련 코드: `CombatDrawingInkSlash.cs`, `CombatDrawingInkEruption.cs`, `DamageImpactFeedback.cs`
 
-## 4. 대화 종료 이벤트 연동
+### 드로잉 선을 이용한 적 투사체 제거
 
-`DialogueEndHandler` · `DialogueStarter` · `DialogueSceneTransition` · `DialogueBlurController`
+**문제점**
 
-**문제** — `OnDialogueEnded` 는 파라미터가 없음. 여러 NPC가 같은 이벤트를 구독하면 **어느 대화가 끝났는지 구분 불가**
+기존 방어 스킬은 선을 그은 위치와 관계없이 모든 방향의 피해를 차단해, 드로잉 위치가 방어 결과에 반영되지 않았습니다.
 
-**조치** — `DialogueManager` 가 `LastFinishedDialogue` 를 보관. 구독자가 자기 대화인지 판별
+**개선 방식**
 
-```csharp
-private void HandleEnd()
-{
-    DialogueManager manager = DialogueManager.Instance;
-    if (manager == null || manager.LastFinishedDialogue != dialogue) return;
-    ...
-}
-```
+- 드로잉 좌표를 월드 고정점으로 보관하고, 카메라 이동에 맞춰 화면 좌표로 다시 투영합니다.
+- 0.5초 동안 적 투사체의 이전·현재 위치 사이 이동 구간을 검사해, 드로잉 선에 닿거나 통과한 투사체만 제거합니다.
+- `EnemyProjectile.Cancel()`로 투사체를 비활성화한 뒤 제거합니다.
+- 첫 투사체 제거 성공 시 콜백을 한 번만 실행해 해당 스킬의 쿨타임을 초기화합니다.
 
-### 실행 순서 의존 제거
+관련 코드: `CombatDrawingCancellationLine.cs`, `PlayerAreaDrawingSkillCaster.cs`, `EnemyProjectile.cs`
 
-`OnEnable` 시점에 `DialogueManager.Instance` 가 아직 없을 수 있음 → `Start` 에서 재시도하고, 그래도 실패하면 경고
+## 2. 상점 시스템
 
-```csharp
-private void OnEnable() => TrySubscribe();
+### 구매 조건 검증과 구매 처리
 
-private void Start()
-{
-    if (!_subscribed && !TrySubscribe())
-        Debug.LogWarning($"[DialogueEndHandler] {name}: DialogueManager.Instance 없음.", this);
-}
-```
+**설계 목표**
 
-`OnDisable` · `OnDestroy` 양쪽에서 구독 해제.
+구매 버튼의 활성화 조건과 실제 구매 요청의 검증 조건을 일치시키고, 구매 실패 시 재고가 차감되지 않도록 처리합니다.
 
-### 종료 후 처리
+**구현 방식**
 
-| 컴포넌트 | 동작 |
+- 재고·재화·아이템 최대 보유 수량 등을 검사하는 `Evaluate()`를 구매 버튼 갱신과 실제 구매 요청에서 함께 사용합니다.
+- 상품 유형에 따라 아이템 구매·최대 체력 강화·최대 스킬 포인트 강화 처리를 구매 서비스에 요청합니다.
+- 구매 서비스가 성공을 반환한 경우에만 재고를 차감하고 상품 목록·상세 UI를 갱신합니다.
+- 실패 결과를 `ShopPurchaseResult`로 구분해 원인에 맞는 안내를 표시합니다.
+
+관련 코드: `ShopController.cs`, `PlayerPurchaseService.cs`, `ShopInventory.cs`
+
+### 상점·상품 ID 기반 재고 저장 및 복원
+
+**설계 목표**
+
+상품 목록의 순서가 바뀌어도 동일한 상품을 식별하고, 게임 저장·불러오기 이후에도 한정 상품의 잔여 재고를 유지합니다.
+
+**구현 방식**
+
+- **상점 ID와 상품 ID의 조합**으로 재고 데이터를 식별합니다.
+- 구매 성공 시 잔여 재고를 차감하고 `SaveManager`의 저장 데이터를 갱신합니다.
+- 재고 조회 시 저장된 값을 우선 사용하고, 저장 이력이 없으면 상품의 초기 재고를 적용합니다.
+- 무제한 재고는 `-1`로 구분해 한정 재고 차감 대상에서 제외합니다.
+
+재고 데이터 갱신과 파일 저장은 구분됩니다. 구매 시에는 저장 데이터를 갱신하고, 게임 저장·불러오기 흐름을 통해 파일에 기록하거나 복원합니다.
+
+관련 코드: `ShopController.cs`, `ShopInventory.cs`, `SaveManager.cs`, `IngameSaveData.cs`
+
+### 대화 선택지와 상점 진입 연결
+
+**설계 목표**
+
+상점 진입 선택지를 고른 뒤 대화 종료와 게임 상태 복원을 거쳐 상점을 엽니다.
+
+**구현 방식**
+
+- 대사 ID와 선택지 인덱스가 지정된 진입 조건과 일치하면 상점 열기를 예약합니다.
+- 대화 종료 이벤트에서 `LastFinishedDialogue`가 해당 NPC의 대화인지 확인합니다.
+- 예약된 진입 요청을 확인하고 예약 상태를 초기화한 뒤 상점을 엽니다.
+- 상점은 상품 데이터의 아이콘·이름·설명·가격을 UI에 반영하고, 페이지 단위로 상품 목록을 표시합니다.
+
+관련 코드: `ShopNPC.cs`, `ShopController.cs`, `ShopUIView.cs`
+
+## 3. 대화 시스템
+
+### 대화 상태에 따른 입력 처리
+
+**설계 목표**
+
+같은 진행 입력을 대사 출력·진행·선택지 대기 상태에 따라 구분해 처리합니다.
+
+**구현 방식**
+
+| 상태 | 입력 처리 |
 |---|---|
-| `DialogueStarter` | 종료 트리거가 있으면 애니메이터 트리거 발동 + NPC 행동 영구 정지, 없으면 배회 재개 |
-| `DialogueSceneTransition` | 현재 스테이지 위치 저장 후 지정 씬 로드 · `transitionRequested` 로 중복 호출 차단 |
-| `DialogueBlurController` | 시작/종료에 맞춰 Volume weight 페이드 · 진행 중 코루틴은 중단 후 재시작 |
-| `DialogueEndHandler` | `fireOnce` 로 1회만 실행 · `ResetFired()` 로 수동 재활성화 |
+| `Inactive` | 대화 진행 입력 처리 중단 |
+| `Typing` | 진행 입력 시 현재 문장 전체 표시 |
+| `WaitingForContinue` | 진행 입력 시 다음 대사로 이동 |
+| `WaitingForChoice` | 일반 진행 입력을 차단하고 선택 결과로 분기 |
 
-블러는 `Time.unscaledDeltaTime` 사용 → 일시정지 중에도 전환 진행.
+타이핑은 `Time.unscaledDeltaTime`의 누적 시간을 표시할 글자 수로 환산합니다. 일시정지 중에도 출력이 진행되며, 프레임이 길어진 경우 한 번에 여러 글자를 표시해 누적 시간에 맞춥니다.
 
----
+관련 코드: `DialogueManager.cs`, `DialogueView.cs`
 
-## 5. NPC 행동 · 상호작용
+### 대사 ID 기반 분기
 
-### 가중치 기반 랜덤 행동
+**문제점**
 
-`NPCIdleBehavior` · `NPCIdleBehaviorData`
+선택지·점프 대상을 배열 인덱스로만 지정하면 대사를 삽입하거나 순서를 바꿀 때 분기 연결도 함께 수정해야 합니다.
 
-**문제** — 같은 스크립트를 쓰면서 NPC마다 성향이 달라야 함. 어떤 NPC는 자주 걷고, 어떤 NPC는 대부분 서 있음
+**개선 방식**
 
-**조치** — 행동 종류 · 지속시간 · 가중치 · 배회 범위를 `ScriptableObject` 로 분리. 누적 가중치로 추첨
+- 대화 시작 시 대사 ID와 인덱스를 `Dictionary`로 매핑합니다.
+- 선택지·점프 대상은 대사 ID를 우선 조회하고, ID가 지정되지 않은 경우 기존 인덱스를 사용합니다.
+- 지정된 ID를 찾지 못하면 오류를 기록하고 대화를 종료합니다.
+- 에디터 검증으로 대사 ID 중복과 존재하지 않는 분기 대상 등을 확인합니다.
 
-```csharp
-private int WeightedRandomIndex()
-{
-    if (_totalWeight <= 0) return 0;
+관련 코드: `DialogueManager.cs`, `Dialogue.cs`
 
-    int roll = Random.Range(0, _totalWeight);
-    int cumulative = 0;
+### 게임 상태 복원과 종료 이벤트 연동
 
-    for (int i = 0; i < data.actions.Length; i++)
-    {
-        IdleAction action = data.actions[i];
-        if (action == null) continue;
+**설계 목표**
 
-        cumulative += Mathf.Max(1, action.weight);
-        if (roll < cumulative) return i;
-    }
-    return data.actions.Length - 1;
-}
-```
+대화가 끝나면 이전 게임 상태를 복원하고, 종료된 대화에 맞는 후속 처리를 실행합니다.
 
-**최적화 처리**
+**구현 방식**
 
-- `Animator.StringToHash` 결과를 `Awake` 에서 캐시 — 매 전환마다 문자열 해싱하지 않음
-- 총 가중치도 `Awake` 에서 1회 계산
-- 이동 판정은 `sqrMagnitude` 비교로 `Sqrt` 회피
-- `stepLength > dist` 클램프로 목표 지점 오버슈트 방지
-- `FlipDeadzone` 으로 미세 이동 시 스프라이트 좌우 뒤집힘 깜빡임 차단
+- 대화 시작 시 이전 게임 상태를 보관한 뒤 대화 상태로 전환합니다.
+- 대화 종료 시 UI와 내부 상태를 정리하고 `LastFinishedDialogue`에 종료된 대화를 기록합니다.
+- 이전 게임 상태를 복원한 뒤 `OnDialogueEnded` 이벤트를 호출합니다.
+- 구독한 시스템은 종료된 대화를 확인해 NPC 행동 재개·상점 진입·씬 전환 등 필요한 후속 처리를 실행합니다.
 
-**설정 검증 실패 시 `enabled = false`** — 잘못된 데이터로 매 프레임 에러를 뿜지 않고 즉시 정지
+대화 중 다른 시스템이 게임 상태를 변경했다면, 종료 시 그 상태를 덮어쓰지 않도록 현재 상태가 여전히 대화 상태인 경우에만 복원합니다.
 
-### 3단계 정지 제어
+관련 코드: `DialogueManager.cs`, `DialogueStarter.cs`, `DialogueEndHandler.cs`, `DialogueSceneTransition.cs`, `ShopNPC.cs`
 
-| 메서드 | 용도 |
-|---|---|
-| `Pause()` | 대화 시작 시 정지 |
-| `Resume()` | 대화 종료 후 재개 · `_stopped` 면 무시 |
-| `StopPermanently()` | 퀘스트 수락 등으로 영구 정지 |
+## 4. NPC 행동 및 상호작용
 
-`Resume()` 이 `_stopped` 를 확인하므로 **영구 정지 후 재개 요청이 와도 되살아나지 않음.**
+### 데이터 기반 가중치 행동 선택
 
-### 상호작용 게이트
+**설계 목표**
 
-`NPCInteractable`
+공통 행동 로직을 사용하면서 NPC별로 행동 종류·지속시간·선택 확률·배회 범위를 설정합니다.
 
-**문제** — 대화 중이거나 일시정지 상태에서 상호작용 프롬프트가 뜨고 입력도 먹힘
+**구현 방식**
 
-**조치** — 프롬프트 표시 조건과 입력 허용 조건에 **같은 함수**를 사용
+- `ScriptableObject`에 NPC 행동 데이터를 분리합니다.
+- 각 행동에 설정된 가중치를 누적해 다음 행동을 선택합니다.
+- 선택된 행동에 따라 애니메이션을 재생하거나 배회 목표 지점으로 이동합니다.
 
-```csharp
-private bool CanInteractNow()
-{
-    GameStateManager manager = GameStateManager.Instance;
-    if (manager != null) return manager.IsState(GameState.Playing);
+관련 코드: `NPCIdleBehavior.cs`, `NPCIdleBehaviorData.cs`
 
-    DialogueManager dialogue = DialogueManager.Instance;
-    return dialogue == null || !dialogue.IsDialogueActive;
-}
-```
+### 컷신 중 행동 중단 및 종료 후 재개
 
-- `GameStateManager` 없는 씬에서는 `DialogueManager` 로 폴백
-- 표시와 입력이 같은 판정을 쓰므로 **"프롬프트는 떠 있는데 눌리지 않는" 상태가 발생하지 않음**
-- 퀘스트 제안이 있으면 수락 시도 → 실패 시 일반 상호작용으로 폴백
+**설계 목표**
 
-```csharp
-if (!TryAcceptQuest()) onInteract.Invoke();
-```
+컷신 중 NPC의 배회와 빌보딩이 연출에 간섭하지 않도록 제어합니다.
 
----
+**구현 방식**
 
-## 6. 상점
+- 컷신 실행 상태를 확인해 NPC의 배회와 빌보딩을 일시 중단합니다.
+- 배회 로직은 타이머와 목표 지점을 보존하고, 컷신 종료 후 진행 중이던 행동을 이어갑니다.
+- 대화에서 사용하는 `Pause()`·`Resume()`과 영구 정지 처리는 별도로 구분합니다.
 
-`ShopController` · `ShopUIView` · `ShopNPC` · `ShopInventory`
+관련 코드: `NPCIdleBehavior.cs`, `NPCFacePlayer.cs`, `StorySequenceRunner.cs`, `CutsceneManager.cs`
 
-### 구매 판정 일원화
+### 상호작용 및 퀘스트 수락 연동
 
-**문제** — 구매 버튼 활성화 조건과 실제 구매 처리 조건이 따로 구현되면 어긋남. 버튼은 눌리는데 구매가 실패하거나 그 반대
+**설계 목표**
 
-**조치** — 판정을 `Evaluate` 하나로 모으고 **버튼 상태와 실제 구매가 같은 함수를 호출**
+플레이어의 근접 여부와 게임 상태에 따라 상호작용 안내와 입력을 제어합니다.
 
-```csharp
-public ShopPurchaseResult Evaluate(ShopItemEntry entry)
-{
-    if (entry == null || !entry.IsConfigured)          return ShopPurchaseResult.InvalidEntry;
-    if (purchaseService == null)                       return ShopPurchaseResult.ServiceUnavailable;
-    if (GetRemainingStock(entry) == 0)                 return ShopPurchaseResult.OutOfStock;
-    if (!purchaseService.CanAfford(entry.Price))       return ShopPurchaseResult.NotEnoughCurrency;
+**구현 방식**
 
-    if (entry.Kind == ShopItemKind.InventoryItem)
-    {
-        ...
-        if (inventory.GetQuantity(definition) + entry.Quantity > definition.MaxStack)
-            return ShopPurchaseResult.InventoryFull;
-    }
-    return ShopPurchaseResult.Success;
-}
-```
+- 상호작용 안내 표시와 입력 처리에서 같은 게임 상태 검사 함수를 사용합니다.
+- 퀘스트 제안이 있으면 퀘스트 시작을 요청하고, 수락 성공 시 설정에 따라 재수락을 제한하거나 저장을 요청합니다.
+- 수락 후 이벤트로 후속 처리를 연결하고, 퀘스트 수락이 처리되지 않으면 일반 상호작용 이벤트를 실행합니다.
 
-```csharp
-// 구매 버튼 활성화
-view.BuyButton.interactable =
-    selectedEntry != null && Evaluate(selectedEntry) == ShopPurchaseResult.Success;
+관련 코드: `NPCInteractable.cs`
 
-// 실제 구매 요청
-ShopPurchaseResult result = Evaluate(entry);
-if (result != ShopPurchaseResult.Success) { ShowResultMessage(result); return result; }
-```
+## 주요 코드 맵
 
-- 결과가 `bool` 이 아니라 **enum** 이라 실패 원인별 안내 메시지를 그대로 매핑
-- 재고 · 재화 · 인벤토리 여유를 **순서대로** 판정 → 사용자에게 가장 먼저 걸린 원인을 알림
-
-### 한정 재고
-
-- `remainingStock` 은 판매 발생 시점에만 기록 — 미판매 상품은 항목 없음
-- 조회 시 없으면 `InitialStock` 반환
-- 무제한 상품은 `-1` 반환으로 구분
-- `resetStockOnClose` 로 상점 닫을 때 초기화 여부 선택
-
-### 열기 · 닫기 상태 관리
-
-**Open**
-
-- `GameState.Playing` 일 때만 허용
-- 인벤토리 UI가 열려 있으면 먼저 닫음
-- 플레이어 드로잉 스킬 취소 + 입력 차단
-- `GameStateManager` 있으면 `Paused` 로, 없으면 `timeScale = 0` 폴백
-
-**Close**
-
-- 상태 복원은 **`Paused` 상태이고 이전이 `Playing` 이었을 때만** — 상점을 여는 사이 다른 시스템이 상태를 바꿨으면 덮어쓰지 않음
-
-**외부 상태 변경 대응**
-
-```csharp
-private void HandleGameStateChanged(GameState previousState, GameState currentState)
-{
-    if (IsOpen && currentState != GameState.Paused) Close(false);
-}
-```
-
-상점이 열린 채로 게임 상태가 바뀌면 자동으로 닫힘. **UI와 게임 상태의 불일치를 구조적으로 차단.**
-
-`EnsureEventSystem()` — 씬에 `EventSystem` 이 없으면 생성. 상점 UI 입력이 씬 구성에 의존하지 않음.
-
-### 대화 선택지 → 상점 진입
-
-`ShopNPC`
-
-**문제** — 대화 UI가 열린 상태에서 상점을 열면 두 UI가 겹침
-
-**조치** — 선택 시점에 **예약**만 하고 대화 종료 후 실행
-
-```csharp
-private void HandleChoiceSelected(Dialogue dialogue, int fromLineIndex, int choiceIndex)
-{
-    if (greetingDialogue == null || dialogue != greetingDialogue) return;
-
-    string lineId = ResolveLineId(dialogue, fromLineIndex);
-    foreach (ShopOpenTrigger trigger in openTriggers)
-        if (trigger != null && trigger.Matches(lineId, choiceIndex))
-        {
-            pendingOpen = true;
-            return;
-        }
-}
-
-private void HandleDialogueEnded()
-{
-    if (manager.LastFinishedDialogue != greetingDialogue) return;
-    bool shouldOpen = pendingOpen || (openWhenDialogueEnds && 트리거 없음);
-    pendingOpen = false;
-    if (shouldOpen) OpenShop();
-}
-```
-
-- 진입 조건을 `lineId + choiceIndex` 로 지정 → **대사 순서가 바뀌어도 유지**
-- 트리거가 비어 있으면 `openWhenDialogueEnds` 로 무조건 진입도 가능
-- `OnValidate` 로 트리거가 가리키는 대사·선택지가 실제 존재하는지 에디터에서 검증
-
----
-
-## 코드 맵
-
-| 파일 | 역할 | 설계 결정 |
+| 영역 | 파일 | 역할 |
 |---|---|---|
-| `DialogueManager` | 대화 재생 · 타이핑 · 선택지 · 상태 전환 | 4상태 기계 · 입력 잠금 프레임 · `Canvas.enabled` |
-| `Dialogue` | 대사 · 선택지 · 점프 데이터 (`ScriptableObject`) | `OnValidate` 로 ID 중복 · 참조 오류 사전 검증 |
-| `DialogueView` | 선택지 버튼 생성 · 정리 | 파괴 대신 비활성화 재사용 |
-| `PortraitCalibration` | 스프라이트별 초상화 보정 (`ScriptableObject`) | 아트 수정 없이 데이터로 배치 보정 |
-| `DialogueStarter` | 대화 시작 · 종료 후 NPC 상태 전환 | `LastFinishedDialogue` 로 자기 대화 식별 |
-| `DialogueEndHandler` | 지정 대화 종료 시 이벤트 발행 | `fireOnce` · `OnEnable` 실패 시 `Start` 재시도 |
-| `DialogueSceneTransition` | 대화 종료 후 씬 전환 | 진행 위치 저장 · 중복 요청 차단 |
-| `DialogueBlurController` | 대화 시작 · 종료 블러 페이드 | 중복 코루틴 중단 · `unscaledDeltaTime` |
-| `NPCIdleBehavior` | 가중치 랜덤 배회 · 대기 | 해시 캐시 · `sqrMagnitude` · 3단계 정지 제어 |
-| `NPCIdleBehaviorData` | NPC별 행동 성향 (`ScriptableObject`) | `OnValidate` 로 잘못된 범위 자동 보정 |
-| `NPCInteractable` | 근접 상호작용 · 퀘스트 수락 | 표시 조건과 입력 조건에 동일 함수 사용 |
-| `ShopController` | 상점 열기 · 닫기 · 구매 판정 · 재고 | `Evaluate` 단일 판정 · 상태 불일치 자동 해소 |
-| `ShopUIView` | 상점 UI 참조 · 목록/상세 전환 | 로직과 뷰 분리 |
-| `ShopNPC` | 대화 선택지 기반 상점 진입 | 선택 시 예약 · 대화 종료 후 실행 |
-| `ShopDebugOpener` | 개발용 단축키 상점 열기 | 디버그 전용 |
+| 스킬 시전 | `PlayerAreaDrawingSkillCaster.cs` | 인식 결과 분기·시전 조건 검증·쿨타임 관리 |
+| 좌표 변환 | `DrawingWorldProjector.cs` | 지면 투영과 시전 지점 검증 |
+| 공격 판정 | `CombatDrawingInkSlash.cs`, `CombatDrawingInkEruption.cs` | 경로형·범위형 대상 검출과 중복 피해 요청 방지 |
+| 투사체 제거 | `CombatDrawingCancellationLine.cs`, `EnemyProjectile.cs` | 이동 구간 검사와 투사체 제거 |
+| 타격 피드백 | `DamageImpactFeedback.cs` | 피해 적용 결과에 따른 타격 피드백 |
+| 상점 구매 | `ShopController.cs`, `PlayerPurchaseService.cs` | 구매 조건 검증과 상품 유형별 구매 처리 |
+| 상점 데이터·UI | `ShopInventory.cs`, `ShopUIView.cs` | 상품 정의와 목록·상세 UI |
+| 재고 저장 | `SaveManager.cs`, `IngameSaveData.cs` | 상점별 상품 재고 데이터 저장 및 복원 |
+| 대화·상점 연결 | `ShopNPC.cs` | 선택지에 따른 진입 예약과 대화 종료 후 상점 열기 |
+| 대화 진행·분기 | `DialogueManager.cs`, `Dialogue.cs`, `DialogueView.cs` | 상태별 입력·대사 ID 조회·선택지 UI |
+| 대화 종료 연동 | `DialogueStarter.cs`, `DialogueEndHandler.cs`, `DialogueSceneTransition.cs` | NPC 상태 전환과 종료 후 이벤트·씬 전환 |
+| 대화 연출 | `DialogueBlurController.cs`, `PortraitCalibration.cs` | 블러 전환과 초상화별 배치 보정 |
+| NPC 행동 | `NPCIdleBehavior.cs`, `NPCIdleBehaviorData.cs`, `NPCFacePlayer.cs` | 가중치 행동 선택과 컷신 중 행동·빌보딩 제어 |
+| NPC 상호작용 | `NPCInteractable.cs` | 근접·게임 상태 검사와 퀘스트 수락 연동 |
