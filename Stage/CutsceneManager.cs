@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Playables;
+using UnityEngine.SceneManagement;
 
 [Flags]
 public enum CutsceneState : byte
@@ -10,7 +11,8 @@ public enum CutsceneState : byte
     Playing = 1 << 0,
     Paused = 1 << 1,
     Skipped = 1 << 2,
-    Completed = 1 << 3
+    Completed = 1 << 3,
+    Cancelled = 1 << 4
 }
 
 [Serializable]
@@ -35,6 +37,7 @@ public class CutsceneManager : MonoBehaviour
     private readonly Dictionary<string, byte> _cutsceneStates = new();
     private readonly Dictionary<string, PlayableDirector> _activeDirectors = new();
     private readonly Dictionary<PlayableDirector, string> _directorToId = new();
+    private readonly HashSet<PlayableDirector> _runtimeOwned = new();
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -46,22 +49,27 @@ public class CutsceneManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         BuildAssetLookup();
+        SceneManager.sceneUnloaded += HandleSceneUnloaded;
     }
     private void OnDestroy()
     {
         if (Instance != this) return;
+
+        SceneManager.sceneUnloaded -= HandleSceneUnloaded;
 
         foreach (var director in _activeDirectors.Values)
         {
             if (director == null) continue;
             director.stopped -= OnDirectorStopped;
             director.Stop();
-            if (director.gameObject != null) Destroy(director.gameObject);
+            if (_runtimeOwned.Contains(director)) Destroy(director.gameObject);
         }
         _activeDirectors.Clear();
         _directorToId.Clear();
         _cutsceneStates.Clear();
         _assetLookup.Clear();
+        _runtimeOwned.Clear();
+        Instance = null;
     }
     private void BuildAssetLookup()
     {
@@ -88,6 +96,7 @@ public class CutsceneManager : MonoBehaviour
     }
     public bool PlayCutscene(string cutsceneId)
     {
+        if (string.IsNullOrWhiteSpace(cutsceneId)) return false;
         if (!_assetLookup.TryGetValue(cutsceneId, out var asset))
         {
             Debug.LogWarning($"[CutsceneManager] cutsceneId not found: {cutsceneId}");
@@ -103,16 +112,84 @@ public class CutsceneManager : MonoBehaviour
         var director = go.AddComponent<PlayableDirector>();
         director.playableAsset = asset;
         director.playOnAwake = false;
+        director.extrapolationMode = DirectorWrapMode.None;
+        _runtimeOwned.Add(director);
 
+        return StartDirector(cutsceneId, director);
+    }
+
+    // Scene-authored bindings are retained, and this Director is never destroyed by the manager.
+    public bool PlayCutscene(string cutsceneId, PlayableDirector sceneDirector)
+    {
+        if (string.IsNullOrWhiteSpace(cutsceneId) || sceneDirector == null
+            || !sceneDirector.isActiveAndEnabled || sceneDirector.playableAsset == null
+            || sceneDirector.state == PlayState.Playing || sceneDirector.playableGraph.IsValid()
+            || _activeDirectors.ContainsKey(cutsceneId) || _directorToId.ContainsKey(sceneDirector))
+        {
+            Debug.LogWarning($"[CutsceneManager] Cannot play scene Director: {cutsceneId}", sceneDirector);
+            return false;
+        }
+
+        return StartDirector(cutsceneId, sceneDirector);
+    }
+
+    private bool StartDirector(string cutsceneId, PlayableDirector director)
+    {
         _activeDirectors[cutsceneId] = director;
         _directorToId[director] = cutsceneId;
         _cutsceneStates[cutsceneId] = (byte)CutsceneState.Playing;
 
         director.stopped += OnDirectorStopped;
-        director.Play();
+        // Publish start before Play, which can stop synchronously for a short/empty asset.
+        try
+        {
+            OnCutsceneStarted?.Invoke(cutsceneId);
+            if (IsPlaying(cutsceneId, director))
+            {
+                director.time = 0;
+                director.Play();
+            }
+            return true;
+        }
+        catch (Exception exception)
+        {
+            CancelCutscene(cutsceneId, director);
+            Debug.LogException(exception, this);
+            return false;
+        }
+    }
 
-        OnCutsceneStarted?.Invoke(cutsceneId);
+    public bool IsPlaying(string cutsceneId, PlayableDirector director)
+    {
+        return cutsceneId != null && _activeDirectors.TryGetValue(cutsceneId, out var current)
+            && ReferenceEquals(current, director);
+    }
+
+    public bool WasCancelled(string cutsceneId)
+    {
+        return _cutsceneStates.TryGetValue(cutsceneId, out var state)
+            && (state & (byte)CutsceneState.Cancelled) != 0;
+    }
+
+    public bool CancelCutscene(string cutsceneId, PlayableDirector expectedDirector)
+    {
+        if (!IsPlaying(cutsceneId, expectedDirector)) return false;
+        if (expectedDirector != null)
+        {
+            expectedDirector.stopped -= OnDirectorStopped;
+            expectedDirector.Stop();
+        }
+        _cutsceneStates[cutsceneId] = (byte)CutsceneState.Cancelled;
+        Cleanup(expectedDirector, cutsceneId);
+        OnCutsceneFinished?.Invoke(cutsceneId);
         return true;
+    }
+
+    private void HandleSceneUnloaded(Scene scene)
+    {
+        var snapshot = new List<KeyValuePair<string, PlayableDirector>>(_activeDirectors);
+        foreach (var entry in snapshot)
+            if (entry.Value == null) CancelCutscene(entry.Key, entry.Value);
     }
     public void SkipCutscene()
     {
@@ -208,7 +285,9 @@ public class CutsceneManager : MonoBehaviour
     {
         _activeDirectors.Remove(cutsceneId);
         _directorToId.Remove(director);
-        if (director != null && director.gameObject != null)
+        if (director != null) director.stopped -= OnDirectorStopped;
+        bool runtimeOwned = _runtimeOwned.Remove(director);
+        if (runtimeOwned && director != null && director.gameObject != null)
             Destroy(director.gameObject);
     }
 }

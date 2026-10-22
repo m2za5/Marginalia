@@ -1,4 +1,4 @@
-Ôªøusing System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -20,19 +20,28 @@ public sealed class ShopController : MonoBehaviour
 {
     [SerializeField] private ShopUIView view;
     [SerializeField] private PlayerPurchaseService purchaseService;
+    [SerializeField] private ShopCameraFocus cameraFocus;
 
     [SerializeField] private bool closeWithEscape = true;
     [SerializeField] private bool resetStockOnClose;
 
     [Header("Messages")]
-    [SerializeField] private string messagePurchased = "Íµ¨Îß§ÌñàÏäµÎãàÎã§.";
-    [SerializeField] private string messageNotEnoughCurrency = "ÏÜåÏßÄÍ∏àÏù¥ Î∂ÄÏ°±Ìï©ÎãàÎã§.";
-    [SerializeField] private string messageOutOfStock = "ÌíàÏ†àÏûÖÎãàÎã§.";
-    [SerializeField] private string messageInventoryFull = "Îçî Ïù¥ÏÉÅ Í∞ÄÏßà Ïàò ÏóÜÏäµÎãàÎã§.";
-    [SerializeField] private string messageFailed = "Íµ¨Îß§Ìï† Ïàò ÏóÜÏäµÎãàÎã§.";
+    [SerializeField] private string messagePurchased = "±∏∏≈«ﬂΩ¿¥œ¥Ÿ.";
+    [SerializeField] private string messageNotEnoughCurrency = "º“¡ˆ±›¿Ã ∫Œ¡∑«’¥œ¥Ÿ.";
+    [SerializeField] private string messageOutOfStock = "«∞¿˝¿‘¥œ¥Ÿ.";
+    [SerializeField] private string messageInventoryFull = "¥ı ¿ÃªÛ ∞°¡˙ ºˆ æ¯Ω¿¥œ¥Ÿ.";
+    [SerializeField] private string messageFailed = "±∏∏≈«“ ºˆ æ¯Ω¿¥œ¥Ÿ.";
 
     private readonly List<ShopItemEntry> visibleEntries = new List<ShopItemEntry>();
+    // Entries without a stable stock key (empty/duplicate id) keep the old per-controller, unsaved stock.
     private readonly Dictionary<ShopItemEntry, int> remainingStock = new Dictionary<ShopItemEntry, int>();
+    private readonly HashSet<string> invalidEntryIds = new HashSet<string>();
+    private bool shopIdValid;
+
+    // Stock for keyed entries lives in SaveManager.CurrentSaveData (saved with SaveGame).
+    // Without a SaveManager it falls back to this per-session store so it still survives scene reloads.
+    private static readonly Dictionary<string, int> sessionStock = new Dictionary<string, int>();
+    private static readonly Dictionary<string, ShopInventory> knownShopIds = new Dictionary<string, ShopInventory>();
 
     private ShopInventory currentInventory;
     private ShopItemEntry selectedEntry;
@@ -42,6 +51,7 @@ public sealed class ShopController : MonoBehaviour
     private GameState previousGameState = GameState.Playing;
     private float previousTimeScale = 1f;
     private bool viewEventsBound;
+    private int currentPage;
 
     public static ShopController Instance { get; private set; }
     public static bool IsAnyOpen => Instance != null && Instance.IsOpen;
@@ -53,8 +63,8 @@ public sealed class ShopController : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning($"[ShopController] {name}: Ïî¨Ïóê ShopControllerÍ∞Ä Îëò Ïù¥ÏÉÅ. " +
-                             "Ïù¥ Ïù∏Ïä§ÌÑ¥Ïä§Îäî ÎπÑÌôúÏÑ±Ìôî.", this);
+            Debug.LogWarning($"[ShopController] {name}: æ¿ø° ShopController∞° µ— ¿ÃªÛ. " +
+                             "¿Ã ¿ŒΩ∫≈œΩ∫¥¬ ∫Ò»∞º∫»≠.", this);
             enabled = false;
             return;
         }
@@ -80,6 +90,10 @@ public sealed class ShopController : MonoBehaviour
 
         if (!closeWithEscape) return;
 
+        // When the player owns the Pause action, ESC reaches the shop only through
+        // PlayerController.RequestContextualCancelOrPause, so one press is handled once.
+        if (playerController != null && playerController.HandlesContextualCancelInput) return;
+
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
         {
@@ -100,7 +114,9 @@ public sealed class ShopController : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    public bool Open(ShopInventory inventory)
+    public bool Open(ShopInventory inventory) => Open(inventory, null);
+
+    public bool Open(ShopInventory inventory, Component owner)
     {
         if (inventory == null || view == null || IsOpen) return false;
 
@@ -108,16 +124,18 @@ public sealed class ShopController : MonoBehaviour
 
         if (purchaseService == null)
         {
-            Debug.LogError("[ShopController] PlayerPurchaseServiceÎ•º Ï∞æÏßÄ Î™ªÌñàÎã§. ÏÉÅÏ†êÏùÑ Ïó¥ Ïàò ÏóÜÎã§.", this);
+            Debug.LogError("[ShopController] PlayerPurchaseService∏¶ √£¡ˆ ∏¯«ﬂ¥Ÿ. ªÛ¡°¿ª ø≠ ºˆ æ¯¥Ÿ.", this);
             return false;
         }
 
         GameStateManager manager = GameStateManager.Instance;
         if (manager != null && !manager.IsState(GameState.Playing)) return false;
-        PlayerInventoryUI.TryCloseAny();
+        PlayerInventoryUI.TryCloseAny(false);
 
         currentInventory = inventory;
         selectedEntry = null;
+        currentPage = 0;
+        ValidateStockIds();
         BuildVisibleEntries();
 
         playerController?.CancelDrawingSkill(DrawingCancelReason.StateChanged);
@@ -141,10 +159,22 @@ public sealed class ShopController : MonoBehaviour
             Time.timeScale = 0f;
         }
 
+        if (cameraFocus != null && owner != null)
+        {
+            cameraFocus.Focus(owner);
+        }
+
+        GunHoSfxBus.Play(GunHoSfxCue.UiOpen);
+
         return true;
     }
 
-    public bool Close() => Close(true);
+    public bool Close()
+    {
+        bool didClose = Close(true);
+        if (didClose) GunHoSfxBus.Play(GunHoSfxCue.UiClose);
+        return didClose;
+    }
 
     private bool Close(bool restorePreviousState)
     {
@@ -152,14 +182,16 @@ public sealed class ShopController : MonoBehaviour
 
         IsOpen = false;
         SetCanvasVisible(false);
+        if (cameraFocus != null) cameraFocus.Release();
         UnsubscribeFromPlayerInventory();
         playerController?.SetLifecycleInputBlocked(false);
 
-        if (resetStockOnClose) remainingStock.Clear();
+        if (resetStockOnClose) ResetStock();
 
         currentInventory = null;
         selectedEntry = null;
         visibleEntries.Clear();
+        currentPage = 0;
 
         GameStateManager manager = GameStateManager.Instance;
 
@@ -180,6 +212,15 @@ public sealed class ShopController : MonoBehaviour
     public static bool TryCloseAny()
     {
         return Instance != null && Instance.Close();
+    }
+
+    // Cancel-input entry point for PlayerController. Consumes the press while the shop is open.
+    public static bool TryHandleCancelInput()
+    {
+        if (Instance == null || !Instance.IsOpen) return false;
+
+        if (Instance.closeWithEscape) Instance.Close();
+        return true;
     }
 
     public ShopPurchaseResult TryPurchaseSelected()
@@ -246,6 +287,23 @@ public sealed class ShopController : MonoBehaviour
     public int GetRemainingStock(ShopItemEntry entry)
     {
         if (entry == null || !entry.HasLimitedStock) return -1;
+
+        if (TryGetStockKey(entry, out string shopId, out string entryId))
+        {
+            SaveManager saveManager = SaveManager.Instance;
+
+            if (saveManager != null)
+            {
+                return saveManager.TryGetShopStock(shopId, entryId, out int saved)
+                    ? Mathf.Max(0, saved)
+                    : entry.InitialStock;
+            }
+
+            return sessionStock.TryGetValue(StockKey(shopId, entryId), out int session)
+                ? session
+                : entry.InitialStock;
+        }
+
         return remainingStock.TryGetValue(entry, out int left) ? left : entry.InitialStock;
     }
 
@@ -253,11 +311,123 @@ public sealed class ShopController : MonoBehaviour
     {
         if (entry == null || !entry.HasLimitedStock) return;
 
-        int left = GetRemainingStock(entry);
-        remainingStock[entry] = Mathf.Max(0, left - 1);
+        int left = Mathf.Max(0, GetRemainingStock(entry) - 1);
+
+        if (TryGetStockKey(entry, out string shopId, out string entryId))
+        {
+            SaveManager saveManager = SaveManager.Instance;
+
+            if (saveManager != null) saveManager.SetShopStock(shopId, entryId, left);
+            else sessionStock[StockKey(shopId, entryId)] = left;
+
+            return;
+        }
+
+        remainingStock[entry] = left;
     }
 
-    public void ResetStock() => remainingStock.Clear();
+    // Resets the current shop's stock to the asset's initial values.
+    public void ResetStock()
+    {
+        remainingStock.Clear();
+
+        if (currentInventory == null || !shopIdValid) return;
+
+        string shopId = currentInventory.ShopId;
+        SaveManager.Instance?.ClearShopStocks(shopId);
+
+        string prefix = StockKey(shopId, string.Empty);
+        List<string> keys = new List<string>(sessionStock.Keys);
+        foreach (string key in keys)
+        {
+            if (key.StartsWith(prefix, System.StringComparison.Ordinal)) sessionStock.Remove(key);
+        }
+    }
+
+    private bool TryGetStockKey(ShopItemEntry entry, out string shopId, out string entryId)
+    {
+        shopId = currentInventory != null ? currentInventory.ShopId : null;
+        entryId = entry != null ? entry.EntryId : null;
+
+        if (!shopIdValid
+            || string.IsNullOrWhiteSpace(entryId)
+            || invalidEntryIds.Contains(entryId)
+            || currentInventory.Entries == null)
+        {
+            return false;
+        }
+
+        foreach (ShopItemEntry candidate in currentInventory.Entries)
+        {
+            if (candidate == entry) return true;
+        }
+
+        return false;
+    }
+
+    private static string StockKey(string shopId, string entryId) => shopId + "/" + entryId;
+
+    private void ValidateStockIds()
+    {
+        invalidEntryIds.Clear();
+        shopIdValid = false;
+
+        if (currentInventory == null) return;
+
+        string shopId = currentInventory.ShopId;
+        bool hasLimitedStock = false;
+        HashSet<string> seenEntryIds = new HashSet<string>();
+
+        if (currentInventory.Entries != null)
+        {
+            foreach (ShopItemEntry entry in currentInventory.Entries)
+            {
+                if (entry == null || !entry.HasLimitedStock) continue;
+
+                hasLimitedStock = true;
+
+                if (string.IsNullOrWhiteSpace(entry.EntryId))
+                {
+                    Debug.LogWarning($"[ShopController] '{currentInventory.name}': limited entry without entryId. " +
+                                     "Its stock is not saved.", currentInventory);
+                }
+                else if (!seenEntryIds.Add(entry.EntryId))
+                {
+                    invalidEntryIds.Add(entry.EntryId);
+                    Debug.LogError($"[ShopController] '{currentInventory.name}': duplicate entryId '{entry.EntryId}'. " +
+                                   "Its stock is not saved.", currentInventory);
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(shopId))
+        {
+            if (hasLimitedStock)
+            {
+                Debug.LogWarning($"[ShopController] '{currentInventory.name}': shopId is empty. " +
+                                 "Limited stock is not saved.", currentInventory);
+            }
+
+            return;
+        }
+
+        if (knownShopIds.TryGetValue(shopId, out ShopInventory owner) && owner != null && owner != currentInventory)
+        {
+            Debug.LogError($"[ShopController] shopId '{shopId}' is used by both '{owner.name}' and " +
+                           $"'{currentInventory.name}'. Stock of '{currentInventory.name}' is not saved.", currentInventory);
+            return;
+        }
+
+        knownShopIds[shopId] = currentInventory;
+        shopIdValid = true;
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticStock()
+    {
+        sessionStock.Clear();
+        knownShopIds.Clear();
+    }
 
 
     public void Refresh()
@@ -273,15 +443,20 @@ public sealed class ShopController : MonoBehaviour
         }
 
         IReadOnlyList<ShopSlotView> slots = view.Slots;
+        ClampPage();
+        int pageStart = currentPage * PageSize;
 
         for (int i = 0; i < slots.Count; i++)
         {
             ShopSlotView slot = slots[i];
             if (slot == null) continue;
 
-            ShopItemEntry entry = i < visibleEntries.Count ? visibleEntries[i] : null;
+            int entryIndex = pageStart + i;
+            ShopItemEntry entry = entryIndex < visibleEntries.Count ? visibleEntries[entryIndex] : null;
             bool hasEntry = entry != null;
             bool soldOut = hasEntry && GetRemainingStock(entry) == 0;
+
+            if (slot.Button != null) slot.Button.gameObject.SetActive(hasEntry);
 
             if (slot.Button != null)
             {
@@ -304,7 +479,7 @@ public sealed class ShopController : MonoBehaviour
                 slot.Label.text = !hasEntry
                     ? string.Empty
                     : entry.Quantity > 1
-                        ? $"{entry.DisplayName} √ó{entry.Quantity}"
+                        ? $"{entry.DisplayName} °ø{entry.Quantity}"
                         : entry.DisplayName;
             }
 
@@ -320,10 +495,12 @@ public sealed class ShopController : MonoBehaviour
             if (slot.Icon != null)
             {
                 slot.Icon.sprite = hasEntry ? entry.Icon : null;
+                slot.Icon.preserveAspect = true;
                 slot.Icon.enabled = slot.Icon.sprite != null;
             }
         }
 
+        RefreshPageButtons();
         RefreshPreview();
     }
 
@@ -347,6 +524,7 @@ public sealed class ShopController : MonoBehaviour
         if (view.PreviewIcon != null)
         {
             view.PreviewIcon.sprite = selectedEntry != null ? selectedEntry.Icon : null;
+            view.PreviewIcon.preserveAspect = true;
             view.PreviewIcon.enabled = view.PreviewIcon.sprite != null;
         }
 
@@ -357,21 +535,70 @@ public sealed class ShopController : MonoBehaviour
         }
     }
 
-    private void SelectVisibleEntry(int index)
+    private void SelectVisibleEntry(int slotIndex)
     {
-        if (index < 0 || index >= visibleEntries.Count) return;
+        int index = currentPage * PageSize + slotIndex;
+
+        if (slotIndex < 0 || slotIndex >= PageSize
+            || index < 0 || index >= visibleEntries.Count)
+        {
+            return;
+        }
+
+        bool hasChanged = selectedEntry != visibleEntries[index];
+
         selectedEntry = visibleEntries[index];
         SetMessage(string.Empty);
         view.ShowDetail();
         Refresh();
+
+        if (IsOpen && hasChanged)
+        {
+            GunHoSfxBus.Play(GunHoSfxCue.UiConfirm);
+        }
     }
 
-    private void BackToList()
+    private int PageSize => view != null ? Mathf.Max(1, view.Slots.Count) : 1;
+
+    private int PageCount => Mathf.Max(1, (visibleEntries.Count + PageSize - 1) / PageSize);
+
+    private void ClampPage()
     {
+        currentPage = Mathf.Clamp(currentPage, 0, PageCount - 1);
+    }
+
+    private void ChangePage(int delta)
+    {
+        if (!IsOpen) return;
+
+        int next = Mathf.Clamp(currentPage + delta, 0, PageCount - 1);
+        if (next == currentPage) return;
+
+        currentPage = next;
         selectedEntry = null;
         SetMessage(string.Empty);
         view.ShowList();
         Refresh();
+    }
+
+    private void PreviousPage() => ChangePage(-1);
+
+    private void NextPage() => ChangePage(1);
+
+    private void RefreshPageButtons()
+    {
+        if (view.PreviousPageButton != null) view.PreviousPageButton.interactable = currentPage > 0;
+        if (view.NextPageButton != null) view.NextPageButton.interactable = currentPage < PageCount - 1;
+    }
+
+    private void BackToList()
+    {
+        bool hadSelection = selectedEntry != null;
+        selectedEntry = null;
+        SetMessage(string.Empty);
+        view.ShowList();
+        Refresh();
+        if (IsOpen && hadSelection) GunHoSfxBus.Play(GunHoSfxCue.UiBack);
     }
 
     private void BuildVisibleEntries()
@@ -421,6 +648,7 @@ public sealed class ShopController : MonoBehaviour
     private void ResolveReferences()
     {
         if (view == null) view = GetComponentInChildren<ShopUIView>(true);
+        if (cameraFocus == null) cameraFocus = GetComponent<ShopCameraFocus>();
 
         if (purchaseService == null)
         {
@@ -442,6 +670,8 @@ public sealed class ShopController : MonoBehaviour
         if (view.CloseButton != null) view.CloseButton.onClick.AddListener(CloseFromButton);
         if (view.BuyButton != null) view.BuyButton.onClick.AddListener(BuyFromButton);
         if (view.BackButton != null) view.BackButton.onClick.AddListener(BackToList);
+        if (view.PreviousPageButton != null) view.PreviousPageButton.onClick.AddListener(PreviousPage);
+        if (view.NextPageButton != null) view.NextPageButton.onClick.AddListener(NextPage);
 
         IReadOnlyList<ShopSlotView> slots = view.Slots;
         for (int i = 0; i < slots.Count; i++)

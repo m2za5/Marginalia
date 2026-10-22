@@ -31,6 +31,8 @@ public class DialogueManager : MonoBehaviour
     [Header("Portrait")]
     [SerializeField] private Image portraitImage;
     [SerializeField] private PortraitCalibration portraitCalibration;
+    [Tooltip("Fixed portrait frame with a RectMask2D. Defaults to the portrait Image's parent.")]
+    [SerializeField] private RectTransform portraitViewport;
 
     [Header("Choices (choicePanel에 중첩 Canvas 권장)")]
     [SerializeField] private Canvas choiceCanvas;
@@ -78,6 +80,14 @@ public class DialogueManager : MonoBehaviour
         {
             _portraitRect = portraitImage.rectTransform;
             _portraitBasePosition = _portraitRect.anchoredPosition;
+
+            if (portraitViewport == null)
+                portraitViewport = _portraitRect.parent as RectTransform;
+
+            Vector2 bottomCenter = new Vector2(0.5f, 0f);
+            _portraitRect.anchorMin = bottomCenter;
+            _portraitRect.anchorMax = bottomCenter;
+            _portraitRect.pivot = bottomCenter;
         }
 
         if (dynamicChoiceView == null) dynamicChoiceView = GetComponent<DialogueView>();
@@ -150,7 +160,7 @@ public class DialogueManager : MonoBehaviour
         dynamicChoiceView?.ClearChoices();
 
         OnDialogueStarted?.Invoke();
-        ShowLine(0);
+        if (ShowLine(0)) GunHoSfxBus.Play(GunHoSfxCue.UiOpen);
     }
 
     private void BuildIdMap()
@@ -184,12 +194,12 @@ public class DialogueManager : MonoBehaviour
         return -1;
     }
 
-    private void ShowLine(int lineIndex)
+    private bool ShowLine(int lineIndex)
     {
         if (_lines == null || lineIndex < 0 || lineIndex >= _lines.Length)
         {
             EndDialogue();
-            return;
+            return false;
         }
 
         _index = lineIndex;
@@ -197,12 +207,13 @@ public class DialogueManager : MonoBehaviour
         if (line == null)
         {
             EndDialogue();
-            return;
+            return false;
         }
 
         if (nameText != null) nameText.text = line.speakerName;
         ApplyPortrait(line.speakerPortrait);
         BeginTyping(line);
+        return true;
     }
 
     private void BeginTyping(DialogueLine line)
@@ -321,8 +332,16 @@ public class DialogueManager : MonoBehaviour
         int target = ResolveIndex(choice.targetLineId, choice.targetLineIndex,
                                   $"line {fromLine} choice {choiceIndex}");
 
-        if (target < 0 || target >= _lines.Length) EndDialogue();
-        else ShowLine(target);
+        if (target < 0 || target >= _lines.Length)
+        {
+            EndDialogue();
+            if (string.IsNullOrEmpty(choice.targetLineId) && choice.targetLineIndex < 0)
+                PlayEndFeedback(GunHoSfxCue.UiConfirm);
+        }
+        else
+        {
+            if (ShowLine(target)) GunHoSfxBus.Play(GunHoSfxCue.UiConfirm);
+        }
     }
 
     private void Advance()
@@ -332,6 +351,7 @@ public class DialogueManager : MonoBehaviour
         if (line.isEnd)
         {
             EndDialogue();
+            PlayEndFeedback(GunHoSfxCue.UiClose);
             return;
         }
 
@@ -342,10 +362,18 @@ public class DialogueManager : MonoBehaviour
         if (next < 0 || next >= _lines.Length)
         {
             EndDialogue();
+            if (!line.hasJump) PlayEndFeedback(GunHoSfxCue.UiClose);
             return;
         }
 
-        ShowLine(next);
+        if (ShowLine(next)) GunHoSfxBus.Play(GunHoSfxCue.DialogueAdvance);
+    }
+
+    private void PlayEndFeedback(GunHoSfxCue cue)
+    {
+        // A dialogue-end listener can immediately open a shop or another dialogue.
+        if (this != null && isActiveAndEnabled && !IsDialogueActive && !ShopController.IsAnyOpen)
+            GunHoSfxBus.Play(cue);
     }
 
     private void ApplyPortrait(Sprite sprite)
@@ -363,6 +391,7 @@ public class DialogueManager : MonoBehaviour
         {
             portraitImage.sprite = sprite;
             portraitImage.preserveAspect = true;
+            FitPortraitToViewport(sprite);
 
             float scale = 1f;
             Vector2 offset = Vector2.zero;
@@ -377,6 +406,17 @@ public class DialogueManager : MonoBehaviour
                 _portraitRect.anchoredPosition = _portraitBasePosition + offset;
             }
         }
+    }
+
+    private void FitPortraitToViewport(Sprite sprite)
+    {
+        if (_portraitRect == null || portraitViewport == null) return;
+
+        Rect spriteRect = sprite.rect;
+        if (spriteRect.height <= 0f) return;
+
+        float height = portraitViewport.rect.height;
+        _portraitRect.sizeDelta = new Vector2(height * spriteRect.width / spriteRect.height, height);
     }
 
     private void EndDialogue()

@@ -1,4 +1,4 @@
-Ôªøusing System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,16 +12,21 @@ public enum ShopItemKind
 [Serializable]
 public sealed class ShopItemEntry
 {
+    [Tooltip("Stable save key for this entry's limited stock. Unique within the shop; never reuse or regenerate.")]
+    [SerializeField] private string entryId = "";
     [SerializeField] private ShopItemKind kind = ShopItemKind.InventoryItem;
     [SerializeField] private InventoryItemDefinition itemDefinition;
     [SerializeField, Min(1)] private int quantity = 1;
     [SerializeField, Min(1)] private int statIncrease = 1;
     [SerializeField] private string statDisplayName = "";
     [SerializeField, TextArea] private string statDescription = "";
+    [Tooltip("Shop icon for this entry. Shown in the slot ItemIcon and the detail preview. " +
+             "If empty on an InventoryItem entry, the item definition icon is used.")]
     [SerializeField] private Sprite statIcon;
     [SerializeField, Min(0)] private int price;
     [SerializeField, Min(-1)] private int stock = -1;
 
+    public string EntryId => entryId;
     public ShopItemKind Kind => kind;
     public InventoryItemDefinition ItemDefinition => itemDefinition;
     public int Quantity => Mathf.Max(1, quantity);
@@ -40,9 +45,9 @@ public sealed class ShopItemEntry
         ? (itemDefinition != null ? itemDefinition.Description : string.Empty)
         : statDescription;
 
-    public Sprite Icon => IsInventoryItem
-        ? (itemDefinition != null ? itemDefinition.Icon : null)
-        : statIcon;
+    public Sprite Icon => statIcon != null
+        ? statIcon
+        : IsInventoryItem && itemDefinition != null ? itemDefinition.Icon : null;
     public bool IsConfigured =>
         IsInventoryItem
             ? itemDefinition != null && itemDefinition.IsConfigured
@@ -54,16 +59,21 @@ public sealed class ShopItemEntry
     fileName = "ShopInventory")]
 public sealed class ShopInventory : ScriptableObject
 {
-    [SerializeField] private string shopDisplayName = "ÏÉÅÏ†ê";
+    [SerializeField] private string shopDisplayName = "ªÛ¡°";
+    [Tooltip("Stable save key for this shop's limited stock. Unique across shops; never reuse or regenerate.")]
+    [SerializeField] private string shopId = "";
     [SerializeField] private ShopItemEntry[] entries = Array.Empty<ShopItemEntry>();
 
     public string ShopDisplayName => shopDisplayName;
+    public string ShopId => shopId;
     public IReadOnlyList<ShopItemEntry> Entries => entries;
 
 #if UNITY_EDITOR
     private void OnValidate()
     {
         if (entries == null) return;
+
+        ValidateStockIds();
 
         for (int i = 0; i < entries.Length; i++)
         {
@@ -75,15 +85,43 @@ public sealed class ShopInventory : ScriptableObject
             if (entry.IsInventoryItem)
             {
                 Debug.LogWarning(
-                    $"[{name}] entries[{i}]: InventoryItemÏù∏Îç∞ itemDefinitionÏù¥ ÎπÑÏóàÍ±∞ÎÇò " +
-                    "Ï†ïÏùòÍ∞Ä Î∂àÏôÑÏ†Ñ. Ïù¥ Ïπ∏ÏùÄ ÏßÑÏó¥X.", this);
+                    $"[{name}] entries[{i}]: InventoryItem¿Œµ• itemDefinition¿Ã ∫Òæ˙∞≈≥™ " +
+                    "¡§¿«∞° ∫“øœ¿¸. ¿Ã ƒ≠¿∫ ¡¯ø≠X.", this);
             }
             else
             {
                 Debug.LogWarning(
-                    $"[{name}] entries[{i}]: Îä•Î†•Ïπò ÏÉÅÌíàÏù∏Îç∞ statDisplayName X. " +
-                    "Ïù¥ Ïπ∏ÏùÄ ÏßÑÏó¥X.", this);
+                    $"[{name}] entries[{i}]: ¥…∑¬ƒ° ªÛ«∞¿Œµ• statDisplayName X. " +
+                    "¿Ã ƒ≠¿∫ ¡¯ø≠X.", this);
             }
+        }
+    }
+
+    private void ValidateStockIds()
+    {
+        bool hasLimitedStock = false;
+        HashSet<string> seenEntryIds = new HashSet<string>();
+
+        for (int i = 0; i < entries.Length; i++)
+        {
+            ShopItemEntry entry = entries[i];
+            if (entry == null || !entry.HasLimitedStock) continue;
+
+            hasLimitedStock = true;
+
+            if (string.IsNullOrWhiteSpace(entry.EntryId))
+            {
+                Debug.LogWarning($"[{name}] entries[{i}]: entryId is empty. Limited stock will not be saved.", this);
+            }
+            else if (!seenEntryIds.Add(entry.EntryId))
+            {
+                Debug.LogError($"[{name}] entries[{i}]: duplicate entryId '{entry.EntryId}'. Stock will not be saved.", this);
+            }
+        }
+
+        if (hasLimitedStock && string.IsNullOrWhiteSpace(shopId))
+        {
+            Debug.LogWarning($"[{name}] shopId is empty. Limited stock will not be saved.", this);
         }
     }
 #endif

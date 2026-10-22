@@ -1,4 +1,4 @@
-ï»¿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
@@ -46,11 +46,11 @@ public class Dialogue : ScriptableObject
             if (line == null) continue;
 
             if (!string.IsNullOrEmpty(line.lineId) && !ids.Add(line.lineId))
-                Debug.LogError($"[{name}] line {i}: lineId '{line.lineId}' ì¤‘ë³µ.", this);
+                Debug.LogError($"[{name}] line {i}: lineId '{line.lineId}' Áßº¹.", this);
 
             if (line.hasJump && string.IsNullOrEmpty(line.jumpTargetId) &&
                 (line.jumpTargetIndex < 0 || line.jumpTargetIndex >= lines.Count))
-                Debug.LogError($"[{name}] line {i}: jumpTargetIndex {line.jumpTargetIndex} ë²”ìœ„ ë°– (0~{lines.Count - 1}).", this);
+                Debug.LogError($"[{name}] line {i}: jumpTargetIndex {line.jumpTargetIndex} ¹üÀ§ ¹Û (0~{lines.Count - 1}).", this);
 
             if (line.choices == null) continue;
 
@@ -61,7 +61,7 @@ public class Dialogue : ScriptableObject
 
                 if (string.IsNullOrEmpty(choice.targetLineId) && choice.targetLineIndex >= lines.Count)
                     Debug.LogError($"[{name}] line {i} choice {c}: targetLineIndex {choice.targetLineIndex} " +
-                                   $"ë²”ìœ„ ë°– (0~{lines.Count - 1}). ë¦¬ìŠ¤íŠ¸ 0-based.", this);
+                                   $"¹üÀ§ ¹Û (0~{lines.Count - 1}). ¸®½ºÆ® 0-based.", this);
             }
         }
 
@@ -70,7 +70,7 @@ public class Dialogue : ScriptableObject
             if (line == null) continue;
 
             if (line.hasJump && !string.IsNullOrEmpty(line.jumpTargetId) && !ids.Contains(line.jumpTargetId))
-                Debug.LogError($"[{name}] jumpTargetId '{line.jumpTargetId}' ì— í•´ë‹¹í•˜ëŠ” ì¤„X.", this);
+                Debug.LogError($"[{name}] jumpTargetId '{line.jumpTargetId}' ¿¡ ÇØ´çÇÏ´Â ÁÙX.", this);
 
             if (line.choices == null) continue;
 
@@ -78,7 +78,7 @@ public class Dialogue : ScriptableObject
             {
                 if (choice == null || string.IsNullOrEmpty(choice.targetLineId)) continue;
                 if (!ids.Contains(choice.targetLineId))
-                    Debug.LogError($"[{name}] targetLineId '{choice.targetLineId}' ì— í•´ë‹¹í•˜ëŠ” ì¤„X.", this);
+                    Debug.LogError($"[{name}] targetLineId '{choice.targetLineId}' ¿¡ ÇØ´çÇÏ´Â ÁÙX.", this);
             }
         }
     }

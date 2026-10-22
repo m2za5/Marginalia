@@ -1,4 +1,4 @@
-ï»¿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 
 public class DialogueStarter : MonoBehaviour
@@ -9,7 +9,7 @@ public class DialogueStarter : MonoBehaviour
     [SerializeField] private bool resumeIdleAfterDialogue = true;
     [SerializeField] private UnityEvent onDialogueEnded = new UnityEvent();
 
-    // master ìª½ì—ì„œ ì¶”ê°€ëœ ê³µê°œ ì ‘ê·¼ìž. ë‹¤ë¥¸ ìŠ¤í¬ë¦½íŠ¸ê°€ ëŸ°íƒ€ìž„ì— êµ¬ë…í•  ìˆ˜ ìžˆë‹¤.
+    // master ÂÊ¿¡¼­ Ãß°¡µÈ °ø°³ Á¢±ÙÀÚ. ´Ù¸¥ ½ºÅ©¸³Æ®°¡ ·±Å¸ÀÓ¿¡ ±¸µ¶ÇÒ ¼ö ÀÖ´Ù.
     public UnityEvent OnDialogueEnded => onDialogueEnded;
 
     private NPCIdleBehavior _idle;

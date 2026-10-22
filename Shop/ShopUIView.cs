@@ -1,4 +1,4 @@
-ï»¿using System;
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -37,6 +37,8 @@ public sealed class ShopUIView : MonoBehaviour
     [SerializeField] private GameObject listPanel;
     [SerializeField] private GameObject detailPanel;
     [SerializeField] private Button backButton;
+    [SerializeField] private Button previousPageButton;
+    [SerializeField] private Button nextPageButton;
 
     [Header("Preview")]
     [SerializeField] private Image previewIcon;
@@ -60,6 +62,8 @@ public sealed class ShopUIView : MonoBehaviour
     public Button CloseButton => closeButton;
     public IReadOnlyList<ShopSlotView> Slots => slots;
     public Button BackButton => backButton;
+    public Button PreviousPageButton => previousPageButton;
+    public Button NextPageButton => nextPageButton;
     public Image PreviewIcon => previewIcon;
     public TMP_Text PreviewNameText => previewNameText;
     public TMP_Text PreviewDescriptionText => previewDescriptionText;
@@ -103,13 +107,13 @@ public sealed class ShopUIView : MonoBehaviour
         if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
 
         if (canvas == null)
-            Debug.LogError($"[ShopUIView] {name}: Canvas ë¯¸í• ë‹¹. ìƒì ì„ ì—´ê³  ë‹«ì„ ìˆ˜ X", this);
+            Debug.LogError($"[ShopUIView] {name}: Canvas ¹ÌÇÒ´ç. »óÁ¡À» ¿­°í ´İÀ» ¼ö X", this);
 
         if (canvasGroup == null)
-            Debug.LogError($"[ShopUIView] {name}: CanvasGroup ë¯¸í• ë‹¹. í´ë¦­ ì°¨ë‹¨ì´ ë™ì‘X.", this);
+            Debug.LogError($"[ShopUIView] {name}: CanvasGroup ¹ÌÇÒ´ç. Å¬¸¯ Â÷´ÜÀÌ µ¿ÀÛX.", this);
 
         if (slots == null || slots.Length == 0)
-            Debug.LogWarning($"[ShopUIView] {name}: ìŠ¬ë¡¯X. ìƒí’ˆì´ í‘œì‹œX.", this);
+            Debug.LogWarning($"[ShopUIView] {name}: ½½·ÔX. »óÇ°ÀÌ Ç¥½ÃX.", this);
     }
 #endif
 }

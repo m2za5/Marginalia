@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class NPCIdleBehavior : MonoBehaviour
 {
@@ -17,6 +17,8 @@ public class NPCIdleBehavior : MonoBehaviour
     private bool _walking;
     private bool _waiting;
     private bool _stopped;
+    private bool _suspendedByCutscene;
+    private int _strollHash;
     private int _walkHash;
     private int _defaultHash;
     private int[] _actionHashes;
@@ -41,19 +43,19 @@ public class NPCIdleBehavior : MonoBehaviour
     {
         if (data == null)
         {
-            Debug.LogError($"[NPCIdleBehavior] {name}: data 미할당.", this);
+            Debug.LogError($"[NPCIdleBehavior] {name}: data ���Ҵ�.", this);
             return false;
         }
 
         if (data.actions == null || data.actions.Length == 0)
         {
-            Debug.LogError($"[NPCIdleBehavior] {name}: '{data.name}'에 actions가 없다.", this);
+            Debug.LogError($"[NPCIdleBehavior] {name}: '{data.name}'�� actions�� ����.", this);
             return false;
         }
 
         if (animator == null)
         {
-            Debug.LogError($"[NPCIdleBehavior] {name}: animator 미할당.", this);
+            Debug.LogError($"[NPCIdleBehavior] {name}: animator ���Ҵ�.", this);
             return false;
         }
 
@@ -93,6 +95,8 @@ public class NPCIdleBehavior : MonoBehaviour
 
     private void Update()
     {
+        if (UpdateCutsceneSuspension()) return;
+
         if (_waiting)
         {
             _timer -= Time.deltaTime;
@@ -145,7 +149,8 @@ public class NPCIdleBehavior : MonoBehaviour
 
             _target = _origin + new Vector3(dx, 0f, 0f);
             _walking = true;
-            animator.Play(_actionHashes[actionIndex]);
+            _strollHash = _actionHashes[actionIndex];
+            animator.Play(_strollHash);
         }
         else
         {
@@ -153,6 +158,23 @@ public class NPCIdleBehavior : MonoBehaviour
             _timer = action.duration;
             animator.Play(_actionHashes[actionIndex]);
         }
+    }
+
+    // Timers and stroll target are kept, so the current action continues after the cutscene.
+    private bool UpdateCutsceneSuspension()
+    {
+        CutsceneManager cutscenes = CutsceneManager.Instance;
+        bool suspended = StorySequenceRunner.IsAnySequenceRunning
+            || (cutscenes != null && cutscenes.IsCutsceneActive);
+
+        if (suspended == _suspendedByCutscene) return suspended;
+
+        _suspendedByCutscene = suspended;
+
+        // Do not walk in place while held.
+        if (_walking) animator.Play(suspended ? _defaultHash : _strollHash);
+
+        return suspended;
     }
 
     private int WeightedRandomIndex()

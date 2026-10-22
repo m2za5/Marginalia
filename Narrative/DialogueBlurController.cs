@@ -1,4 +1,4 @@
-ï»¿using System.Collections;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -20,7 +20,7 @@ public class DialogueBlurController : MonoBehaviour
     {
         if (manager == null || blurVolume == null)
         {
-            Debug.LogError("[DialogueBlurController] manager/blurVolume ì°¸ì¡° ë¹„ì–´ìˆìŒ");
+            Debug.LogError("[DialogueBlurController] manager/blurVolume ÂüÁ¶ ºñ¾îÀÖÀ½");
             return;
         }
         manager.OnDialogueStarted += FadeIn;

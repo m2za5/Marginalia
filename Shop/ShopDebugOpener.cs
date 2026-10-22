@@ -1,4 +1,4 @@
-ï»¿using UnityEngine;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 [DisallowMultipleComponent]
@@ -15,7 +15,7 @@ public sealed class ShopDebugOpener : MonoBehaviour
 
         if (ShopController.Instance == null)
         {
-            Debug.LogError("[ShopDebugOpener] ì”¬ì— ShopController X.", this);
+            Debug.LogError("[ShopDebugOpener] ¾À¿¡ ShopController X.", this);
             return;
         }
 
@@ -27,16 +27,16 @@ public sealed class ShopDebugOpener : MonoBehaviour
 
         if (shopInventory == null)
         {
-            Debug.LogError("[ShopDebugOpener] shopInventory ë¯¸í• ë‹¹.", this);
+            Debug.LogError("[ShopDebugOpener] shopInventory ¹ÌÇÒ´ç.", this);
             return;
         }
 
         if (!ShopController.Instance.Open(shopInventory))
         {
             Debug.LogWarning(
-                "[ShopDebugOpener] ìƒì ì„ ì—´ì§€ X. " +
-                $"GameState={GameStateManager.Instance?.CurrentState.ToString() ?? "ë§¤ë‹ˆì € X"} " +
-                "(Playingì´ ì•„ë‹ˆë©´ X)", this);
+                "[ShopDebugOpener] »óÁ¡À» ¿­Áö X. " +
+                $"GameState={GameStateManager.Instance?.CurrentState.ToString() ?? "¸Å´ÏÀú X"} " +
+                "(PlayingÀÌ ¾Æ´Ï¸é X)", this);
         }
     }
 }

@@ -1,4 +1,4 @@
-ï»¿using UnityEngine;
+using UnityEngine;
 
 [CreateAssetMenu(fileName = "New IdleBehavior", menuName = "Marginalia/NPC/Idle Behavior Data")]
 public class NPCIdleBehaviorData : ScriptableObject
@@ -20,11 +20,11 @@ public class NPCIdleBehaviorData : ScriptableObject
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        // Random.Range(min, max)ì—ì„œ min > maxë©´ ì¡°ìš©ížˆ ë’¤ì§‘ížŒ ê²°ê³¼ê°€ ë‚˜ì˜¨ë‹¤. ì €ìž¥ ì‹œì ì— ë§‰ëŠ”ë‹¤.
+        // Random.Range(min, max)¿¡¼­ min > max¸é Á¶¿ëÈ÷ µÚÁýÈù °á°ú°¡ ³ª¿Â´Ù. ÀúÀå ½ÃÁ¡¿¡ ¸·´Â´Ù.
         if (pauseMax < pauseMin) pauseMax = pauseMin;
 
         if (string.IsNullOrEmpty(walkStateName))
-            Debug.LogWarning($"[{name}] walkStateNameì´ ë¹„ì–´ ìžˆë‹¤. Stroll ì•¡ì…˜ì´ ì• ë‹ˆë©”ì´ì…˜ ì—†ì´ ì´ë™í•œë‹¤.", this);
+            Debug.LogWarning($"[{name}] walkStateNameÀÌ ºñ¾î ÀÖ´Ù. Stroll ¾×¼ÇÀÌ ¾Ö´Ï¸ÞÀÌ¼Ç ¾øÀÌ ÀÌµ¿ÇÑ´Ù.", this);
 
         if (actions == null) return;
 
@@ -37,8 +37,8 @@ public class NPCIdleBehaviorData : ScriptableObject
             if (action.duration < 0f) action.duration = 0f;
 
             if (action.type == IdleAction.ActionType.Animate && string.IsNullOrEmpty(action.stateName))
-                Debug.LogWarning($"[{name}] actions[{i}]: Animateì¸ë° stateNameì´ ë¹„ì–´ ìžˆë‹¤. " +
-                                 "defaultStateNameìœ¼ë¡œ í´ë°±ëœë‹¤.", this);
+                Debug.LogWarning($"[{name}] actions[{i}]: AnimateÀÎµ¥ stateNameÀÌ ºñ¾î ÀÖ´Ù. " +
+                                 "defaultStateNameÀ¸·Î Æú¹éµÈ´Ù.", this);
         }
     }
 #endif

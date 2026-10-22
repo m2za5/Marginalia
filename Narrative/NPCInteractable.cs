@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
@@ -12,7 +12,7 @@ public class NPCInteractable : MonoBehaviour
     [SerializeField] private bool requireProximity = true;
 
     [Header("Quest Offer")]
-    [SerializeField] private Quest questOffer;
+    [SerializeField] private string _questOfferId;
     [SerializeField] private bool questOfferAvailable;
     [SerializeField] private bool disableQuestOfferAfterAccepted = true;
     [SerializeField] private bool saveAfterQuestAccepted = true;
@@ -101,7 +101,7 @@ public class NPCInteractable : MonoBehaviour
 
     public bool TryAcceptQuest()
     {
-        if (!questOfferAvailable || questOffer == null || string.IsNullOrWhiteSpace(questOffer.questId))
+        if (!questOfferAvailable || string.IsNullOrWhiteSpace(_questOfferId))
         {
             return false;
         }
@@ -110,16 +110,11 @@ public class NPCInteractable : MonoBehaviour
 
         if (questManager == null)
         {
-            Debug.LogWarning($"[NPCInteractable] QuestManager is missing. questId: {questOffer.questId}", this);
+            Debug.LogWarning($"[NPCInteractable] QuestManager is missing. questId: {_questOfferId}", this);
             return false;
         }
 
-        if (!questManager.RegisterQuest(questOffer))
-        {
-            return false;
-        }
-
-        bool accepted = questManager.StartQuest(questOffer.questId);
+        bool accepted = questManager.StartQuest(_questOfferId);
 
         if (!accepted)
         {
@@ -173,11 +168,6 @@ public class NPCInteractable : MonoBehaviour
         if (GetComponent<Collider2D>() != null)
             Debug.LogError($"[NPCInteractable] {name}: 2D 콜라이더. " +
                            "이 프로젝트는 3D 충돌. BoxCollider로 교체.", this);
-
-        if (questOffer != null)
-        {
-            questOffer.requiredAmount = Mathf.Max(1, questOffer.requiredAmount);
-        }
     }
 #endif
 }

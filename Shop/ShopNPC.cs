@@ -1,4 +1,4 @@
-Ôªøusing System;
+using System;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -38,8 +38,8 @@ public sealed class ShopNPC : MonoBehaviour
     {
         if (!subscribed && !TrySubscribe())
         {
-            Debug.LogWarning($"[ShopNPC] {name}: DialogueManager.InstanceÍ∞Ä X. " +
-                             "ÎåÄÌôîÎ°ú ÏÉÅÏ†êÏùÑ Ïó¥ Ïàò X.", this);
+            Debug.LogWarning($"[ShopNPC] {name}: DialogueManager.Instance∞° X. " +
+                             "¥Î»≠∑Œ ªÛ¡°¿ª ø≠ ºˆ X.", this);
         }
     }
 
@@ -52,19 +52,19 @@ public sealed class ShopNPC : MonoBehaviour
 
         if (shopInventory == null)
         {
-            Debug.LogError($"[ShopNPC] {name}: shopInventory ÎØ∏Ìï†Îãπ.", this);
+            Debug.LogError($"[ShopNPC] {name}: shopInventory πÃ«“¥Á.", this);
             onShopOpenFailed?.Invoke();
             return;
         }
 
         if (ShopController.Instance == null)
         {
-            Debug.LogError($"[ShopNPC] {name}: Ïî¨Ïóê ShopControllerÍ∞Ä X.", this);
+            Debug.LogError($"[ShopNPC] {name}: æ¿ø° ShopController∞° X.", this);
             onShopOpenFailed?.Invoke();
             return;
         }
 
-        if (ShopController.Instance.Open(shopInventory)) onShopOpened?.Invoke();
+        if (ShopController.Instance.Open(shopInventory, this)) onShopOpened?.Invoke();
         else onShopOpenFailed?.Invoke();
     }
 
@@ -139,12 +139,12 @@ public sealed class ShopNPC : MonoBehaviour
     private void OnValidate()
     {
         if (shopInventory == null)
-            Debug.LogWarning($"[ShopNPC] {name}: shopInventoryÍ∞Ä X.", this);
+            Debug.LogWarning($"[ShopNPC] {name}: shopInventory∞° X.", this);
 
         if (greetingDialogue == null)
         {
-            Debug.LogWarning($"[ShopNPC] {name}: greetingDialogueÍ∞Ä X. " +
-                             "ÎåÄÌôî Í∏∞Î∞ò Ïó¥Í∏∞Í∞Ä ÎèôÏûëÌïòÏßÄ X.", this);
+            Debug.LogWarning($"[ShopNPC] {name}: greetingDialogue∞° X. " +
+                             "¥Î»≠ ±‚π› ø≠±‚∞° µø¿€«œ¡ˆ X.", this);
             return;
         }
 
@@ -157,7 +157,7 @@ public sealed class ShopNPC : MonoBehaviour
 
             if (string.IsNullOrEmpty(trigger.LineId))
             {
-                Debug.LogWarning($"[ShopNPC] {name}: openTriggers[{i}]Ïùò lineIdÍ∞Ä X.", this);
+                Debug.LogWarning($"[ShopNPC] {name}: openTriggers[{i}]¿« lineId∞° X.", this);
                 continue;
             }
 
@@ -172,7 +172,7 @@ public sealed class ShopNPC : MonoBehaviour
                     {
                         Debug.LogError(
                             $"[ShopNPC] {name}: openTriggers[{i}] choiceIndex " +
-                            $"{trigger.ChoiceIndex}Í∞Ä '{trigger.LineId}' Ï§ÑÏùò ÏÑ†ÌÉùÏßÄ Í∞úÏàò Over.", this);
+                            $"{trigger.ChoiceIndex}∞° '{trigger.LineId}' ¡Ÿ¿« º±≈√¡ˆ ∞≥ºˆ Over.", this);
                     }
 
                     break;
@@ -182,8 +182,8 @@ public sealed class ShopNPC : MonoBehaviour
             if (!found)
             {
                 Debug.LogError(
-                    $"[ShopNPC] {name}: openTriggers[{i}]Ïùò lineId '{trigger.LineId}'Ïóê " +
-                    $"Ìï¥ÎãπÌïòÎäî Ï§ÑÏù¥ '{greetingDialogue.name}'Ïóê X.", this);
+                    $"[ShopNPC] {name}: openTriggers[{i}]¿« lineId '{trigger.LineId}'ø° " +
+                    $"«ÿ¥Á«œ¥¬ ¡Ÿ¿Ã '{greetingDialogue.name}'ø° X.", this);
             }
         }
     }
